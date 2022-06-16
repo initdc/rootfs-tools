@@ -1,0 +1,8 @@
+# Soft dependencies extracted from modules themselves.
+softdep btrfs pre: blake2b-256
+softdep btrfs pre: sha256
+softdep btrfs pre: xxhash64
+softdep btrfs pre: crc32c
+softdep libcrc32c pre: crc32c
+softdep spi_pxa2xx_platform pre: dw_dmac
+softdep xt_LOG pre: nf_log_syslog

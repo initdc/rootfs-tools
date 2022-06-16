@@ -1,4 +1,5 @@
 cache
-mars*
+/mars*
 rootfs
 ubuntu*.img
+edison*

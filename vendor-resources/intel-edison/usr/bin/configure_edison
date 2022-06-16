@@ -1,0 +1,1283 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2014, Intel Corporation.
+# Copyright (c) 2020, Ferry Toth and Matthias Dieter Wallnöfer
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms and conditions of the GNU Lesser General Public License,
+# version 2.1, as published by the Free Software Foundation.
+#
+# This program is distributed in the hope it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+# more details.
+#
+
+import os
+import sys
+from sys import stdout
+import time
+import termios
+import fcntl
+import subprocess
+import argparse
+import re
+import socket
+import struct
+from array import *
+import configparser
+from bottle import route, run, debug, template, request, static_file, redirect
+import datetime
+from datetime import timedelta
+
+WSREGEX = re.compile(r"\s+")
+STATE_DIR = '/var/lib/edison_config_tools'
+HOST_AP_MODE_FILE = "/.start-in-host-ap-mode"
+CONNMAN_SETTINGS = "/var/lib/connman/settings"
+CONNMAN_SERVICES = "/var/lib/connman/wifi.config"
+
+# Types
+#######################################
+class classHostName:
+    Old = ""
+    New = ""
+    Valid = False
+    Changed = False
+    Tooltip = ""
+
+class classWired:
+    Type = ""
+    Mode = ""
+    NewMode = ""
+    IP = ""
+    Changed = False
+
+class classWifiAP:
+    Name = ""
+    Passphrase = ""
+    NewMode = ""
+    IP = ""
+    Changed = False
+    Enabled = False
+
+class classSettings:
+    HostName = classHostName()
+    Wired = classWired()
+    BT = classWifiAP()
+    Wifi = classWifiAP()
+    AP = classWifiAP()
+
+class text_colors:
+  CYAN = '\033[96m'
+  MAGENTA = '\033[95m'
+  BLUE  = '\033[94m'
+  YELLOW = '\033[93m'
+  GREEN = '\033[92m'
+  RED = '\033[91m'
+  END = '\033[0m'
+
+# Helpers
+#######################################
+def _checkName(newName):
+    length = len(newName)
+    if length < 1 or length > 63:
+        return -1
+    if newName[0] == '-' or newName[length - 1] == '-':
+        return -2
+    for i in range(length):
+        if not newName[i].isalnum() and newName[i] != '-':
+            return -3
+    return 0
+
+def _changeHostName(newName):
+  hostname_file = open('/etc/hostname','w')
+  hostname_file.write(newName + "\n")
+  hostname_file.close()
+  subprocess.call("hostname -F /etc/hostname", shell=True)
+
+def _getDefaultSSID():
+    data = os.popen("cat /sys/class/net/wlan0/address | tr '[:lower:]' '[:upper:]'").read()
+    APSSID = "EDISON-" + data[12:14] +"-" + data[15:17]
+    return APSSID
+
+def _getAPSSID():
+    ConnmanSettings = configparser.ConfigParser()
+    ConnmanSettings.optionxform=str
+    ConnmanSettings.read(CONNMAN_SETTINGS)
+    APSSID = ConnmanSettings.get('WiFi', 'Tethering.Identifier', fallback='')
+    APPassword = ConnmanSettings.get('WiFi', 'Tethering.Passphrase', fallback='')
+
+    if APSSID == "":
+        if APPassword == "":
+            APPassword = os.popen("cat /factory/serial_number").read()
+        subprocess.check_output("connmanctl tether wifi off '" + _getDefaultSSID() + "' '" + APPassword + "'", shell=True)
+    return APSSID
+
+def _changeAPSSID(newName):
+    ConnmanSettings = configparser.ConfigParser()
+    ConnmanSettings.optionxform=str
+    ConnmanSettings.read(CONNMAN_SETTINGS)
+    APPassword = ConnmanSettings.get('WiFi', 'Tethering.Passphrase', fallback='')
+    if APPassword == "":
+        APPassword = os.popen("cat /factory/serial_number").read()
+    subprocess.check_output("connmanctl tether wifi off '" + newName + "' '" + APPassword + "'", shell=True)
+
+def _changeAPPassword(newPass):
+    subprocess.check_output("connmanctl tether wifi off '" + _getAPSSID() + "' '" + newPass + "'", shell=True)
+
+def _changeAPCredentials(newName, newPass):
+    subprocess.check_output("connmanctl tether wifi off '" + newName + "' '" + newPass + "'", shell=True)
+
+def _getWiFiMode():
+    modestr = ''
+    try:
+        modestr = subprocess.check_output('connmanctl technologies', shell=True)
+    except subprocess.CalledProcessError:
+        return "Err"
+    except Exception as inst:
+        return "Err"
+
+    modestr = str(modestr, 'utf-8')
+    modestr = "[Wifi]" + modestr.split('/net/connman/technology/wifi')[1].split('/net/connman/technology')[0].replace(' ','')
+    Section = configparser.ConfigParser()
+    Section.optionxform=str
+    Section.read_string(modestr)
+    if Section['Wifi']['Connected'] == 'True':
+        return "Connected"
+    if Section['Wifi']['Tethering'] == 'True':
+        return "AP"
+    if Section['Wifi']['Powered'] == 'True':
+        return "Powered"
+    return "Off"
+
+def _getWiredMode():
+    modestr = ''
+    try:
+        modestr = subprocess.check_output('connmanctl technologies', shell=True)
+    except subprocess.CalledProcessError:
+        return "Err"
+    except Exception as inst:
+        return "Err"
+
+    modestr = str(modestr, 'utf-8')
+    if modestr.find("ethernet") == -1:
+        return "None"
+    modestr = "[Wired]" + modestr.split('/net/connman/technology/ethernet')[1].split('/net/connman/technology')[0].replace(' ','')
+    Section = configparser.ConfigParser()
+    Section.optionxform=str
+    Section.read_string(modestr)
+    if Section['Wired']['Connected'] == 'True':
+        return "Connected"
+    if Section['Wired']['Powered'] == 'True':
+        return "Powered"
+    return "Off"
+
+def _getBTMode():
+    modestr = ''
+    try:
+        modestr = subprocess.check_output('connmanctl technologies', shell=True)
+    except subprocess.CalledProcessError:
+        return "Err"
+    except Exception as inst:
+        return "Err"
+
+    modestr = str(modestr, 'utf-8')
+    if modestr.find("bluetooth") == -1:
+        return "None"
+    modestr = "[Bluetooth]" + modestr.split('/net/connman/technology/bluetooth')[1].split('/net/connman/technology')[0].replace(' ','')
+    Section = configparser.ConfigParser()
+    Section.optionxform=str
+    Section.read_string(modestr)
+    if Section['Bluetooth']['Connected'] == 'True':
+        return "Connected"
+    if Section['Bluetooth']['Powered'] == 'True':
+        return "Powered"
+    return "Off"
+
+def _getGadgetMode():
+    modestr = ''
+    modestr = subprocess.run('lsusb', shell=False, stderr=subprocess.PIPE)
+    modestr = str(modestr.stderr, 'utf-8')
+    if modestr.find("root hub") >= 0:
+        return "None"
+
+    modestr = ''
+    try:
+        modestr = subprocess.check_output('connmanctl technologies', shell=True)
+    except subprocess.CalledProcessError:
+        return "Err"
+    except Exception as inst:
+        return "Err"
+
+    modestr = str(modestr, 'utf-8')
+    if modestr.find("gadget") == -1:
+        return "None"
+    modestr = "[Wired]" + modestr.split('/net/connman/technology/gadget')[1].split('/net/connman/technology')[0].replace(' ','')
+    Section = configparser.ConfigParser()
+    Section.optionxform=str
+    Section.read_string(modestr)
+    if Section['Wired']['Connected'] == 'True':
+        return "Connected"
+    if Section['Wired']['Powered'] == 'True':
+        return "Powered"
+    return "Off"
+
+def _setWiFiMode(Mode):
+    CurrentMode = _getWiFiMode()
+    if CurrentMode == 'Err':
+        return
+    if Mode == 'Off':
+        if CurrentMode != 'Off':
+            subprocess.check_output("connmanctl disable wifi", shell=True)
+    elif Mode == 'Powered':
+        if CurrentMode == 'Off':
+            subprocess.check_output("connmanctl enable wifi", shell=True)
+        elif CurrentMode == 'AP':
+            subprocess.check_output("connmanctl tether wifi off", shell=True)
+    elif Mode == 'AP':
+        if CurrentMode == 'Off':
+            subprocess.check_output("connmanctl enable wifi", shell=True)
+            time.sleep(1)
+            subprocess.check_output("connmanctl tether wifi on", shell=True)
+    time.sleep(1)
+    return
+
+def _setBTMode(Mode):
+    CurrentMode = _getBTMode()
+    if CurrentMode == 'Err':
+        return
+    if Mode == 'Off':
+        if CurrentMode != 'Off':
+            subprocess.check_output("connmanctl disable bluetooth", shell=True)
+    elif Mode == 'Powered':
+        if CurrentMode == 'Off':
+            subprocess.check_output("connmanctl enable bluetooth", shell=True)
+    time.sleep(1)
+    return
+
+def _setGadgetMode(Mode):
+    CurrentMode = _getGadgetMode()
+    if CurrentMode == 'Err':
+        return
+    if Mode == 'Off':
+        if CurrentMode != 'Off':
+            subprocess.check_output("connmanctl disable gadget", shell=True)
+    elif Mode == 'Powered':
+        if CurrentMode == 'Off':
+            subprocess.check_output("connmanctl enable gadget", shell=True)
+    time.sleep(1)
+    return
+
+def _changeRootPassword(newPass):
+  echoSub = subprocess.Popen(["echo", "root:" + newPass], stdout=subprocess.PIPE)
+  chpasswdSub = subprocess.Popen(["chpasswd"], stdin=echoSub.stdout, stdout=subprocess.PIPE)
+  echoSub.stdout.close()  # Allow echoSub to receive a SIGPIPE if chpasswdSub exits.
+  chpasswdSub.communicate()[0]
+
+def _getHostName():
+    return(str(subprocess.check_output('hostname', shell=True).strip(), 'utf-8'))
+
+def _getIFaceIP(iface):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(),
+            0x8915,  # SIOCGIFADDR
+            struct.pack('256s', iface[:15].encode('utf-8'))
+        )[20:24])
+    except OSError:
+        return "None"
+    finally:
+        s.close()
+
+def _scanForNetworks():
+    global lastScanned
+    global _cachedServices
+    connection = []
+    now = datetime.datetime.now()
+    if((now - lastScanned) >  timedelta(seconds = 30)):
+        lastScanned = now
+        subprocess.check_output("connmanctl scan wifi", shell=True)
+        connection.append(("", "Scanning, please wait 10 seconds", ""))
+    else:
+        connection = _getServices("wifi")
+        _cachedServices = connection
+    return connection
+
+def _getServices(type):
+    data = subprocess.getoutput("connmanctl services | grep '" + type + "'")
+    data = data.split("\n")
+
+    connection = []
+    for i in range(len(data)):
+        (left, seperator, session) = data[i].rpartition(' ')
+        ssid = left[4:].rstrip()
+        flags = left[:4].rstrip()
+        if ssid != "":
+            connection.append((flags, ssid, session))
+    return connection
+
+def _getPrivateService(type):
+    data = subprocess.getoutput("connmanctl services | grep '" + type + "'")
+    data = data.split("\n")
+
+    for i in range(len(data)):
+        (left, _, session) = data[i].rpartition(' ')
+        ssid = left[4:].rstrip()
+        if ssid == "":
+            return session
+
+def _getCachedService(service):
+    global _cachedServices
+
+    for i in _cachedServices:
+        if i[2] == service:
+            return i[1]
+
+def _getIFace(service):
+    data = subprocess.getoutput("connmanctl services '" + service[2] + "'| grep Ethernet")
+    return re.compile(r"Interface=(\w+)").search(data)[1]
+
+def _selectNetwork(service):
+    data = subprocess.getoutput("connmanctl connect '" + service + "'")
+    if data.startswith("Error") and not data.endswith("In progress"):
+        print(text_colors.RED + data + text_colors.END)
+        return False
+    else:
+        print(text_colors.GREEN + data + text_colors.END)
+        return True
+
+def _store(WiFi_Network, WiFi_Name, WiFi_Passphrase, WiFi_Identity=None):
+    ConnmanServices = configparser.ConfigParser()
+    ConnmanServices.optionxform=str
+    ConnmanServices.read(CONNMAN_SERVICES)
+    service = WiFi_Network
+    service.replace(" ", "")
+    print(service)
+    if ConnmanServices.get("service_" + service, "Name", fallback="") == "":
+        ConnmanServices["service_" + service] = {}
+    if WiFi_Passphrase != "!@#$%^&*":
+        ConnmanServices["service_" + service]["Type"] = "wifi"
+        ConnmanServices["service_" + service]["Name"] = WiFi_Name
+        ConnmanServices["service_" + service]["SSID"] = WiFi_Name.encode("utf-8").hex()
+        if WiFi_Passphrase is not None:
+            ConnmanServices["service_" + service]["Passphrase"] = WiFi_Passphrase
+        if WiFi_Identity is not None:
+            ConnmanServices["service_" + service]["Identity"] = WiFi_Identity
+        with open(CONNMAN_SERVICES, 'w') as configfile:
+            ConnmanServices.write(configfile)
+
+# Main Functions
+#######################################
+def _getch():
+  fd = sys.stdin.fileno()
+
+  oldterm = termios.tcgetattr(fd)
+  newattr = termios.tcgetattr(fd)
+  newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
+  termios.tcsetattr(fd, termios.TCSANOW, newattr)
+
+  try:
+    while 1:
+      try:
+        c = sys.stdin.read(1)
+        break
+      except IOError: pass
+  finally:
+    termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
+  return c
+
+def _getPassword(prompt):
+  stdout.write(prompt)
+  stdout.flush()
+  pw = ""
+
+  while 1:
+    c = _getch()
+    if c == '\r' or c == '\n':
+      break
+    if c == '\003':
+      raise KeyboardInterrupt
+    if c == '\x08' or c == '\x7f':
+      if len(pw):
+        pw = pw[:-1]
+        stdout.write('\x08')
+        stdout.write('\x20')
+        stdout.write('\x08')
+    else:
+      pw = pw + c
+      stdout.write("*")
+    stdout.flush()
+  stdout.write('\r')
+  stdout.write('\n')
+  return pw
+
+def _verified(selection):
+  verify = input("Is " + text_colors.MAGENTA + selection + text_colors.END + " correct? " + text_colors.YELLOW + "[Y or N]" + text_colors.END + ": ")
+  if verify == "Y" or verify == "y":
+    return 1
+  elif verify == "N" or verify == "n":
+    return 0
+  else:
+    while 1:
+      verify = input("Please enter either " + text_colors.YELLOW + "[Y or N]" + text_colors.END + ": ")
+      if verify == "Y" or verify == "y":
+        return 1
+      elif verify == "N" or verify == "n":
+        return 0
+
+def reset(stage):
+  subprocess.call("clear", shell=True)
+  print(text_colors.CYAN + "\nConfigure Edison: " + stage + "\n" + text_colors.END)
+
+def setEdisonHostname():
+  while 1:
+    name = input("Give this Edison a unique name.\nThis will be used for the access point SSID and mDNS address.\nMake it at least five characters long (leave empty to skip): ")
+    if (WSREGEX.search(name)):
+      print("")
+      print('Hostname must not contain whitespaces. Please try again.')
+      print("")
+    elif (len(name) == 0):
+      print("Skipping name change...")
+      break
+    elif (len(name) > 4):
+      if _verified(name):
+        print("")
+        break
+      else:
+        print("")
+    else:
+      print("")
+      print('\"' + name + '\" is too short. Please try again.')
+      print("")
+
+  if len(name) > 0:
+      changeName(name)
+
+def setEdisonPassword():
+   while 1:
+     password = _getPassword("Enter a new password (leave empty to abort)\nThis will be used to connect to the access point and login to the device.\nPassword: \t")
+     if (password == _getPassword("Please enter the password again: \t")):
+         if (WSREGEX.search(password)):
+             print("")
+             print('The device password must not contain whitespaces. Please try again.')
+             print("")
+         elif len(password) == 0:
+             print("Skipping password change.")
+             return
+         elif len(password) < 8 or len(password) > 63:
+             print("")
+             print("The device password must be between 8 and 63 characters long. Please try again.")
+             print("")
+         else:
+             break
+     else:
+       print("")
+       print("The passwords do not match. Please try again.")
+       print("")
+
+   changePassword(password)
+   print("The device password has been changed.\n")
+
+def _selectWifiMenu(ssid_keys):
+  i = 2
+  print("0 :\tRescan for networks")
+  print("1 :\tExit WiFi Setup")
+  print("2 :\tManually input a hidden SSID")
+  for ssid in ssid_keys:
+    i = i + 1
+    print(i, ":\t", ssid[1])
+
+  print("")
+  choice = -1
+  while 1:
+    try:
+      if i == 2:
+        choice = int(input("\nEnter 0 to rescan for networks.\nEnter 1 to exit.\nEnter 2 to input a hidden network SSID: "))
+      elif i == 3:
+        choice = int(input("\nEnter 0 to rescan for networks.\nEnter 1 to exit.\nEnter 2 to input a hidden network SSID.\nEnter 3 to choose %s: " % ssid_keys[0]))
+      else:
+        choice = int(input("\nEnter 0 to rescan for networks.\nEnter 1 to exit.\nEnter 2 to input a hidden network SSID.\nEnter a number between 3 to %s to choose one of the listed network SSIDs: " % i))
+    except TypeError:
+      choice = -1
+    except ValueError:
+      choice = -1
+
+    if choice == 0:
+      break
+    elif choice == 1:
+      sys.exit(0)
+    elif choice == 2:
+      break
+    elif choice > 2 and choice <= i and _verified(ssid_keys[choice-3][1]):
+      break
+  return choice
+
+def _getNetworkIdentity():
+  return input("Please enter the network username: ")
+
+def _getNetworkPassword():
+  pw = ''
+  while len(pw) == 0:
+    pw = _getPassword("What is the network password?: ")
+  return pw
+
+def _configureHiddenNetwork(ssid):
+  service = _getPrivateService('wifi')
+
+  print('''
+    0: OPEN
+    1: WEP
+    2: WPA-Personal (PSK)
+    3: WPA-Enterprise (EAP)
+  ''')
+  while 1:
+    try:
+      security = int(input("Select the type of security [0 to 3]: "))
+    except TypeError:
+      security = -1
+    except ValueError:
+      security = -1
+
+    if security == 0:
+      _store(service, ssid, None)
+      break
+    elif security == 1:
+      password = ''
+      while len(password) != 5 and len(password) != 13:
+        print("Password must be either 5 or 13 characters.")
+        password = _getNetworkPassword()
+      _store(service, ssid, password)
+      break
+    elif security == 2:
+      password = ''
+      while len(password) < 8 or len(password) > 63:
+        print("Password must be between 8 and 63 characters.")
+        password = _getNetworkPassword()
+      _store(service, ssid, password)
+      break
+    elif security == 3:
+      identity = _getNetworkIdentity()
+      password = _getNetworkPassword()
+      _store(service, ssid, password, identity)
+      break
+    else:
+      print("Invalid input.")
+
+  return _selectNetwork(service)
+
+def _configureNetwork(choice,ssid_keys):
+  service = ssid_keys[choice-3][2]
+
+  if service.endswith("_none"):
+    return _selectNetwork(service)
+  elif service.endswith("_wep"):
+    identity = None
+    password = ''
+    while len(password) != 5 and len(password) != 13:
+      print("Password must be either 5 or 13 characters.")
+      password = _getNetworkPassword()
+  elif service.endswith("_psk") or service.endswith("_wpa") or service.endswith("_rsn"):
+    identity = None
+    password = ''
+    while len(password) < 8 or len(password) > 63:
+      print("Password must be between 8 and 63 characters.")
+      password = _getNetworkPassword()
+  elif service.endswith("_ieee8021x"):
+    identity = _getNetworkIdentity()
+    password = _getNetworkPassword()
+
+  _store(service, ssid_keys[choice-3][1], password, identity)
+  return _selectNetwork(service)
+
+def configureNetworkAP(changewifi):
+  ssid = changewifi[0]
+  password = changewifi[1]
+
+  if WSREGEX.search(ssid) or WSREGEX.search(password):
+    print("The SSID and the password must not contain whitespaces.")
+    return False
+  if len(ssid) == 0:
+    print("SSID must not be empty.")
+    return False
+  if len(password) < 8 or len(password) > 63:
+    print("Password must be between 8 and 63 characters.")
+    return False
+
+  _changeAPCredentials(ssid, password)
+  return True
+
+def _checkNetwork():
+  i = 60
+  while 1:
+    waiting = "Connecting: %s seconds left         \r" % i
+    stdout.write(waiting)
+    stdout.flush()
+    time.sleep(1)
+    address = _getIFaceIP("wlan0")
+    if address != 'None':
+      print("Done. Please connect your laptop or PC to the same network as this device and go to " + \
+        text_colors.CYAN + "http://" + address + text_colors.END + " or " + text_colors.CYAN + \
+        "http://" + _getHostName() + ".local" + text_colors.END + \
+        " in your browser.")
+      break
+    if i == 0:
+      print("Not connected. Something went wrong.")
+      break
+    i = i-1
+
+def connectNetwork():
+  ssid = ""
+  _setWiFiMode("Powered")
+
+  while 1:
+    reset("WiFi Connection")
+
+    while True:
+      ssid_keys = _scanForNetworks()
+      if len(ssid_keys) > 0 and ssid_keys[0][1] == "Scanning, please wait 10 seconds":
+        print(ssid_keys[0][1])
+        time.sleep(10)
+      else:
+        break
+
+    choice = _selectWifiMenu(ssid_keys)
+
+    #choice is validated within selectNetwork.
+    if choice == 2:
+      while 1:
+        ssid = input("Please enter the hidden network SSID: ")
+        if _verified(ssid):
+          break
+      if _configureHiddenNetwork(ssid):
+        break
+    elif choice > 2:
+      if _configureNetwork(choice, ssid_keys):
+        break
+
+    # for error messages
+    time.sleep(5)
+
+  _checkNetwork()
+  disableOneTimeSetup(True)
+
+def showWiFiIP():
+    if _getWiFiMode() == 'AP':
+        return _getIFaceIP("tether")
+    ipstr = _getIFaceIP('wlan0')
+    if ipstr == 'None':
+        print("No IP address found. Device not connected?")
+    return ipstr
+
+def showWiFiMode():
+    Mode = _getWiFiMode()
+    if Mode == 'Err':
+        print("Connman error")
+    return Mode
+
+def isRestartWithAPSet():
+    try:
+        ret_value = subprocess.call("mkdir -p /update", shell=True)
+        if ret_value != 0:
+            print("Could not create destination folder.")
+            return False
+    except Exception as inst:
+        print("Could not create destination folder.")
+        print(type(inst), file=sys.stderr)
+        print(inst, file=sys.stderr)
+        return False
+
+    try:
+        ret_value = subprocess.call("losetup -o 8192 /dev/loop0 /dev/disk/by-partlabel/update", shell=True)
+        if ret_value != 0:
+            print("Could not setup loop device")
+            return False
+    except Exception as inst:
+        print("Could not setup loop device")
+        print(type(inst), file=sys.stderr)
+        print(inst, file=sys.stderr)
+        return False
+
+    try:
+        ret_value = subprocess.call("mount /dev/loop0 /update", shell=True)
+        if ret_value != 0:
+            print("Could not perform mount operation.")
+            return False
+    except Exception as inst:
+        print("Could not perform mount operation.")
+        print(type(inst), file=sys.stderr)
+        print(inst, file=sys.stderr)
+        return False
+
+    if os.path.isfile("/update" + HOST_AP_MODE_FILE):
+        ap_mode = True
+    else:
+        ap_mode = False
+    try:
+        ret_value = subprocess.call("umount /update", shell=True)
+        if ret_value != 0:
+            print("Could not perform umount operation.")
+            return False
+    except Exception as inst:
+        print("Could not perform umount operation.")
+        print(type(inst), file=sys.stderr)
+        print(inst, file=sys.stderr)
+        return False
+    try:
+        ret_value = subprocess.call("rmdir /update", shell=True)
+        if ret_value != 0:
+            print("Could not delete destination folder.")
+            return False
+    except Exception as inst:
+        print("Could not delete destination folder.")
+        print(type(inst), file=sys.stderr)
+        print(inst, file=sys.stderr)
+        return False
+
+    return ap_mode
+
+def _decideToConnect():
+  while 1:
+    verify = input("Do you want to set up wifi? " + text_colors.YELLOW + "[Y or N]" + text_colors.END + ": ")
+    if verify == "y" or verify == "Y":
+      return 1
+    elif verify == "n" or verify == "N":
+      return 0
+    else:
+      print("I need Y or N as a reply.")
+
+def full():
+  reset("Device Password")
+  setEdisonPassword()
+  reset("Device Name")
+  setEdisonHostname()
+  if _decideToConnect():
+    connectNetwork()
+  else:
+    print("Done.\n")
+
+def enableOneTimeSetup(persist):
+    subprocess.call("systemctl restart blink-led", shell=True)
+    _setWiFiMode("Off")
+
+    print("Restarting WiFi access point. Please wait until the AP appears...\n")
+
+    if persist:
+        subprocess.call("systemctl enable blink-led &> /dev/null", shell=True)
+
+    _setWiFiMode("AP")
+    myssid = _getAPSSID()
+
+    print("From your PC or laptop, connect to the", "'" + myssid + "' network ")
+    print("and visit",  "'" + _getHostName() + ".local' in the browser")
+
+def disableOneTimeSetup(persist):
+    subprocess.call("systemctl stop blink-led &> /dev/null", shell=True)
+    _setWiFiMode("Off")
+
+    if persist:
+        subprocess.call("systemctl disable blink-led &> /dev/null", shell=True)
+
+    _setWiFiMode("Powered")
+
+def toggleOneTimeSetup(persist):
+    if _getWiFiMode() == "AP":
+        disableOneTimeSetup(persist)
+    else:
+        enableOneTimeSetup(persist)
+
+def changePassword(newPass):
+  if WSREGEX.search(newPass):
+    print("New password contains whitespaces. Ignoring")
+    return
+
+  _changeRootPassword(newPass)
+  if len(newPass) > 0:
+    _changeAPPassword(newPass)
+
+  if (not os.path.isfile(STATE_DIR + "/password-setup.done")):
+    pass_done = open(STATE_DIR + "/password-setup.done", "w")
+    pass_done.write("Indicates that password has been changed via oobe.\n")
+    pass_done.close()
+    print("First-time root password setup complete. Enabling SSH on WiFi interface.")
+    subprocess.call("sed -i 's/^BindToDevice=/# BindToDevice=/g' /lib/systemd/system/sshd.socket ; sync ; systemctl daemon-reload; systemctl restart sshd.socket", shell=True)
+
+def changeName(newName):
+    if _checkName(newName) < 0:
+        print("Invalid new name. Ignoring")
+        return
+    _changeHostName(newName)
+    _changeAPSSID(newName)
+
+def showNames():
+    hostname = _getHostName()
+    ssid = _getAPSSID()
+    default_ssid = _getDefaultSSID()
+    print('{"hostname": "' + hostname + '", "ssid": "' + ssid + '", "default_ssid": "' + default_ssid + '"}')
+
+# Web Interface
+#######################################
+@route('/')
+def main_form():
+    print(request['REMOTE_ADDR'])
+    return template('index' )
+
+@route('/', method='POST')
+def do_main_form():
+    control = request.forms.get('button')
+    print(control)
+    redirect('/')
+
+@route('/activate')
+def activate():
+    global Settings
+    if Settings.HostName.Changed and Settings.HostName.Valid:
+        hostname = Settings.HostName.New
+    else:
+        hostname = _getHostName()
+    return template('activate', hostname = hostname, \
+        nameChange = Settings.HostName.Changed, wiredChange = Settings.Wired.Changed, \
+        btChange = Settings.BT.Changed, wifiChange = Settings.Wifi.Changed, \
+        apChange = Settings.AP.Changed)
+
+@route('/activate', method='POST')
+def do_activate_form():
+    global Settings
+    if Settings.HostName.Changed and Settings.HostName.Valid:
+        _changeHostName(Settings.HostName.New)
+        Settings.HostName.Changed = False
+    if Settings.Wired.Changed:
+        if Settings.Wired.NewMode == "checked":
+            _setGadgetMode("Powered")
+        else:
+            _setGadgetMode("Off")
+        Settings.Wired.Changed = False
+    if Settings.BT.Changed:
+        if Settings.BT.NewMode == "checked":
+            new_BTMode = "Powered"
+        else:
+            new_BTMode = "Off"
+        _setBTMode(new_BTMode)
+        BTMode = _getBTMode()
+        if Settings.BT.Name is not None and BTMode == "Powered" or BTMode == "Connected":
+            _selectNetwork(Settings.BT.Name)
+        Settings.BT.Changed = False
+    if Settings.Wifi.Changed:
+        if Settings.Wifi.NewMode == "checked":
+            new_WiFiMode = "Powered"
+        else:
+            new_WiFiMode = "Off"
+        _setWiFiMode(new_WiFiMode)
+        WiFiMode = _getWiFiMode()
+        if Settings.Wifi.Name is not None and WiFiMode == "Powered" or WiFiMode == "Connected":
+            WiFi_ServiceName = _getCachedService(Settings.Wifi.Name)
+            _store(Settings.Wifi.Name, WiFi_ServiceName, Settings.Wifi.Passphrase)
+            Settings.Wifi.Passphrase = ""
+            _selectNetwork(Settings.Wifi.Name)
+        Settings.Wifi.Changed = False
+    if Settings.AP.Changed:
+        if Settings.AP.Name != "":
+            _changeAPSSID(Settings.AP.Name)
+        if Settings.AP.Passphrase != "":
+            _changeAPPassword(Settings.AP.Passphrase)
+            Settings.AP.Passphrase = ""
+        if Settings.AP.Enabled:
+            enableOneTimeSetup(False)
+        else:
+            disableOneTimeSetup(False)
+        Settings.AP.Changed = False
+
+    redirect('/name')
+
+@route('/name')
+def name_form():
+    global Settings
+    Settings.HostName.Old = _getHostName()
+    if not Settings.HostName.Changed:
+        hostname = Settings.HostName.Old
+        tooltip = "Names consist of 'a-z', '0-9', '-'"
+        checked = ""
+    else:
+        hostname = Settings.HostName.New
+        tooltip = Settings.HostName.Tooltip
+        if Settings.HostName.Valid:
+            checked = "font-weight: bold; "
+        else:
+            checked = "border:3px; border-style:solid; border-color:red; padding: 1em; "
+
+    return template('name', hostname_checked = checked, hostname_tooltip = tooltip, \
+        hostname = hostname)
+
+@route('/name', method='POST')
+def do_name_form():
+    global Settings
+    Settings.HostName.New = request.forms.get('hostname')
+    Settings.HostName.Changed = False
+    if Settings.HostName.New != Settings.HostName.Old:
+        Settings.HostName.Changed = True
+        # update done in do_activate_form()
+        Settings.HostName.Valid = False
+        check = _checkName(Settings.HostName.New)
+        if check == 0:
+            Settings.HostName.Valid = True
+            Settings.HostName.Tooltip = "Valid host name"
+        elif check == -1:
+            Settings.HostName.Tooltip = "Incorrect length"
+        elif check == -2:
+            Settings.HostName.Tooltip = "Can not start or end with '-'"
+        elif check == -3:
+            Settings.HostName.Tooltip = "Can not contain other then 'a-z', '0-9', '-'"
+    redirect('/name')
+
+@route('/wired')
+def wired_form():
+    global Settings
+    Host_IP = request['REMOTE_ADDR']
+    Net = _getGadgetMode()
+    if Net == "None":
+        Net = _getWiredMode()
+        if Net == "None":
+            Settings.Wired.Type = "No ethernet available"
+            Settings.Wired.Mode = ""
+        elif Net == "Powered":
+            Settings.Wired.Type = "Ethernet dongle"
+            Settings.Wired.Mode = "checked"
+        elif Net == "Connected":
+            Settings.Wired.Type = "Ethernet dongle"
+            Settings.Wired.Mode = "checked"
+        else:
+            Settings.Wired.Type = "An error has occured"
+            Settings.Wired.Mode = ""
+    elif Net == "Powered":
+        Settings.Wired.Type = "Ethernet over USB (OTG)"
+        Settings.Wired.Mode = "checked"
+    elif Net == "Connected":
+        Settings.Wired.Type = "Ethernet over USB (OTG)"
+        Settings.Wired.Mode = "checked"
+    elif Net == "Off":
+        Settings.Wired.Type = "Ethernet over USB (OTG)"
+        Settings.Wired.Mode = ""
+    else:
+        Settings.Wired.Type = "An error has occured"
+        Settings.Wired.Mode = ""
+
+    connections = _getServices("Wired")
+    if connections:
+        ConnState = connections[0][0]
+    else:
+        ConnState = ""
+    Wired_State = ""
+
+    Settings.Wired.IP = "Unknown"
+    if Net == "Connected":
+        if "O" in ConnState:
+            Wired_State = "Primary connection verified On Line"
+        elif "R" in ConnState:
+            Wired_State = "Fall back connection standby"
+        Settings.Wired.IP = _getIFaceIP(_getIFace(connections[0]))
+    elif Net == "Powered":
+        if "*" in ConnState:
+            Wired_State = "Connection available"
+        else:
+            Wired_State = "Not plugged"
+        Settings.Wired.IP = "Unconnected"
+
+    return template('wired', Wired_Type = Settings.Wired.Type, Wired_IP = Settings.Wired.IP, \
+        Wired_Mode = Settings.Wired.NewMode if Settings.Wired.Changed else Settings.Wired.Mode, \
+        Wired_State = Wired_State, Host_IP = Host_IP)
+
+@route('/wired', method='POST')
+def do_wired_form():
+    global Settings
+    Settings.Wired.NewMode = request.forms.get('Wired_Mode', '')
+    Settings.Wired.Changed = False
+    if Settings.Wired.NewMode != Settings.Wired.Mode:
+        Settings.Wired.Changed = True
+        # update done in do_activate_form()
+    redirect('/wired')
+
+@route('/bt')
+def bt_form():
+    global Settings
+    Host_IP = request['REMOTE_ADDR']
+    Net = _getBTMode()
+
+    BT_Mode = ""
+    if Net == "Powered" or Net == "Connected":
+        BT_Mode = "checked"
+
+    connections = _getServices("bluetooth")
+    if connections:
+        ConnState = connections[0][0]
+    else:
+        ConnState = ""
+    BT_State = ""
+
+    Settings.BT.IP = "Unknown"
+    if Net == "Connected":
+        if "O" in ConnState:
+            BT_State = "Primary connection verified On Line"
+        elif "R" in ConnState:
+            BT_State = "Fall back connection standby"
+        Settings.BT.IP = _getIFaceIP(_getIFace(connections[0]))
+    elif Net == "Powered":
+        if "*" in ConnState:
+            BT_State = "Connection available"
+        else:
+            BT_State = "Not plugged"
+        Settings.BT.IP = "Unconnected"
+
+    return template('bt', rows = connections, BT_IP = Settings.BT.IP, \
+        BT_Mode = Settings.BT.NewMode if Settings.BT.Changed else BT_Mode, \
+        BT_State = BT_State, Host_IP = Host_IP)
+
+@route('/bt', method='POST')
+def do_bt_form():
+    global Settings
+    Settings.BT.NewMode = request.forms.get('BT_Mode', '')
+    Settings.BT.Name = request.forms.get('newbts')
+
+    Settings.BT.Changed = True
+    # update done in do_activate_form()
+    redirect('/bt')
+
+@route('/wireless')
+@route('/wirelessr')
+def wireless_form():
+    global Settings
+    Host_IP = request['REMOTE_ADDR']
+    WiFi_mode = ""
+    Settings.Wifi.IP = "WiFi is currently not powered"
+    WiFiMode = _getWiFiMode()
+    WiFi_State = ""
+    ReloadMode = False
+
+    if WiFiMode == "Connected":
+        WiFi_mode = "checked"
+        Settings.Wifi.IP = _getIFaceIP("wlan0")
+    elif WiFiMode == "Powered":
+        Settings.Wifi.IP = "WiFi is powered but inactive"
+
+    connections = []
+    if WiFiMode == "Powered" or WiFiMode == "Connected":
+        connections = _scanForNetworks()
+        print(connections)
+        if len(connections) > 0 and connections[0][1] == "Scanning, please wait 10 seconds":
+            WiFi_State = "Scanning"
+            ReloadMode = True
+        else:
+            if WiFiMode == "Connected":
+                ConnState = connections[0][0]
+                if "O" in ConnState:
+                    WiFi_State = "Primary connection verified On Line"
+                elif "R" in ConnState:
+                    WiFi_State = "Fall back connection standby"
+
+    if ReloadMode == True:
+        return template('wirelessr',
+                    WiFi_mode = Settings.Wifi.NewMode if Settings.Wifi.Changed else WiFi_mode,
+                    rows = connections, WiFi_IP = Settings.Wifi.IP, WiFi_Passphrase = "!@#$%^&*",
+                    WiFi_State = WiFi_State, Host_IP = Host_IP)
+    else:
+        return template('wireless',
+                    WiFi_mode = Settings.Wifi.NewMode if Settings.Wifi.Changed else WiFi_mode,
+                    rows = connections, WiFi_IP = Settings.Wifi.IP, WiFi_Passphrase = "!@#$%^&*",
+                    WiFi_State = WiFi_State, Host_IP = Host_IP)
+
+@route('/wireless', method='POST')
+def do_wireless_form():
+    global Settings
+    Settings.Wifi.NewMode = request.forms.get('WiFi_mode', '')
+    Settings.Wifi.Name = request.forms.get('newwifis')
+    Settings.Wifi.Passphrase = request.forms.get('WiFipassphrase')
+
+    Settings.Wifi.Changed = True
+    Settings.AP.Changed = False # AP and wifi activation are mutually exclusive
+    # update done in do_activate_form()
+    redirect('/wireless')
+
+@route('/ap')
+def ap_form():
+    global Settings
+
+    AP_name = _getAPSSID()
+    hostname = _getHostName()
+
+    if _getWiFiMode() == "AP":
+        AP_mode = "checked"
+        AP_IP = "Access Point " + AP_name + " is currently on IP address: " + _getIFaceIP("tether")
+    else:
+        AP_mode = ""
+        AP_IP = "Access Point is currently OFF"
+
+    return template('ap', hostname = hostname,
+        AP_mode = Settings.AP.NewMode if Settings.AP.Changed else AP_mode,
+        AP_name = Settings.AP.Name if Settings.AP.Changed else AP_name,
+        AP_passphrase = "", AP_IP = AP_IP)
+
+@route('/ap', method='POST')
+def do_ap_form():
+    global Settings
+    Settings.AP.NewMode = request.forms.get('AP_mode', '')
+    AP_name = request.forms.get('AP_name')
+    AP_passphrase = request.forms.get('AP_passphrase')
+
+    Settings.AP.Changed = False
+    if _getWiFiMode() != "AP" and Settings.AP.NewMode == "checked":
+        Settings.AP.Changed = True
+        Settings.AP.Enabled = True
+        # update done in do_activate_form()
+
+        if AP_name != Settings.AP.Name:
+            if WSREGEX.search(AP_name):
+                return "The SSID must not contain whitespaces."
+            if len(AP_name) == 0:
+                return "The SSID must not be empty."
+            Settings.AP.Name = AP_name
+        if AP_passphrase != "":
+            if WSREGEX.search(AP_passphrase):
+                return "The passphrase must not contain whitespaces."
+            if len(AP_passphrase) < 8 or len(AP_passphrase) > 63:
+                return "The passphrase must be between 8 and 63 characters."
+            Settings.AP.Passphrase = AP_passphrase
+            AP_passphrase = None
+    elif _getWiFiMode() == "AP" and Settings.AP.NewMode == "":
+        Settings.AP.Changed = True
+        Settings.AP.Enabled = False
+        # update done in do_activate_form()
+    if Settings.AP.Changed:
+        Settings.Wifi.Changed = False # AP and wifi activation are mutually exclusive
+
+    redirect('/ap')
+
+@route('/img/<filename:re:.*\.png>')
+def send_image(filename):
+    return static_file(filename, root='img', mimetype='image/png')
+
+@route('/img/<filename:re:.*\.svg>')
+def send_image(filename):
+    return static_file(filename, root='img', mimetype='image/svg+xml')
+
+@route('/css/<filename:re:.*\.css>')
+def send_static(filename):
+    return static_file(filename, root='css')
+
+@route('/script/<filename:re:.*\.js>')
+def send_static(filename):
+    return static_file(filename, root='script')
+
+@route('/<filename:re:favicon.ico>')
+def send_image(filename):
+    return static_file(filename, root='img', mimetype='image/x-icon')
+
+# Main
+#######################################
+def main():
+    global lastScanned
+    global Settings
+    lastScanned = datetime.datetime.min
+    Settings = classSettings()
+
+    parser = argparse.ArgumentParser(prog='configure_edison')
+
+    parser.add_argument('--restartWithAP', dest='restartwithap', help=argparse.SUPPRESS, action='store_true', default=False)
+    parser.add_argument('--persist', dest='persist', help=argparse.SUPPRESS, action='store_true', default=False)
+
+    root_group = parser.add_mutually_exclusive_group()
+
+    group_interactive = root_group.add_mutually_exclusive_group()
+    group_interactive.add_argument('--setup', dest='setup', help='Goes through changing the device name, password, and wifi options', action='store_true', default=False)
+    group_interactive.add_argument('--name', dest='name', help='Changes the device name', action='store_true', default=False)
+    group_interactive.add_argument('--password', dest='password', help='Changes the device password', action='store_true', default=False)
+    group_interactive.add_argument('--wifi', dest='wifi', help='Changes the wifi options', action='store_true', default=False)
+
+    group_non_interactive = root_group.add_mutually_exclusive_group()
+    group_non_interactive.add_argument('--isRestartWithAPSet', dest='isrestartwithapset', help=argparse.SUPPRESS, action='store_true', default=False)
+    group_non_interactive.add_argument('--showWiFiIP', dest='showwifiip', help='IP address associated with the wireless interface', action='store_true', default=False)
+    group_non_interactive.add_argument('--showWiFiMode', dest='showwifimode', help='Show current mode for the wireless interface', action='store_true', default=False)
+    group_non_interactive.add_argument('--disableOneTimeSetup', dest='disableonetimesetup', help='Disable one-time setup with WiFi access point and enable WiFi client mode. \
+                                       Append --persist to retain this setting after reboot', action='store_true', default=False)
+    group_non_interactive.add_argument('--enableOneTimeSetup', dest='enableonetimesetup', help='Enable one-time setup with WiFi access point and disable WiFi client mode. \
+                                       Append --persist to retain this setting after reboot', action='store_true', default=False)
+    group_non_interactive.add_argument('--toggleOneTimeSetup', dest='toggleonetimesetup', help='Switch between one-time setup with WiFi access point and WiFi client mode, and visa-versa. \
+                                       Append --persist to retain this setting after reboot', action='store_true', default=False)
+    group_non_interactive.add_argument('--changePassword', metavar='password', dest='changepassword', const='', help=argparse.SUPPRESS, nargs='?')
+    group_non_interactive.add_argument('--changeName', metavar='name', dest='changename', help=argparse.SUPPRESS, nargs=1)
+    group_non_interactive.add_argument('--changeWiFi', metavar='SSID password', dest='changewifi', help=argparse.SUPPRESS, nargs=2)
+    group_non_interactive.add_argument('--showNames', dest='shownames', help='Show device name and SSID', action='store_true', default=False)
+    group_non_interactive.add_argument('--webInterface', dest='webInterface', help='Start a web server', action='store_true', default=False)
+
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(1)
+
+    args = parser.parse_args()
+
+    if args.name:
+        reset("Device Name")
+        setEdisonHostname()
+
+    if args.password:
+        reset("Device Password")
+        setEdisonPassword()
+
+    if args.wifi:
+        connectNetwork()
+        if not os.path.isfile(STATE_DIR + "/password-setup.done"):
+            print("Warning: SSH is not yet enabled on the wireless interface. To enable SSH access to this device via wireless run configure_edison --password first.")
+
+    if args.setup:
+        full()
+
+    if args.shownames:
+        showNames()
+
+    if args.isrestartwithapset:
+        print(isRestartWithAPSet())
+
+    if args.changepassword != None:
+        changePassword(args.changepassword)
+
+    if args.changename != None:
+        changeName(args.changename[0])
+
+    if args.showwifiip:
+        print(showWiFiIP())
+
+    if args.showwifimode:
+        print(showWiFiMode())
+
+    if args.enableonetimesetup:
+        enableOneTimeSetup(args.persist)
+
+    if args.disableonetimesetup:
+        disableOneTimeSetup(args.persist)
+
+    if args.toggleonetimesetup:
+        toggleOneTimeSetup(args.persist)
+
+    if args.changewifi:
+        if configureNetworkAP(args.changewifi):
+            enableOneTimeSetup(False)
+
+    if args.webInterface:
+        os.chdir(os.path.dirname('/usr/lib/edison_config_tools/public/'))
+        debug(False)
+        run(host='0.0.0.0', port=80)
+
+    #print 'restartwithap = ',args.restartwithap
+    #print 'persist = ',args.persist
+    #print 'setup = ',args.setup
+    #print 'name = ',args.name
+    #print 'password = ',args.password
+    #print 'wifi = ',args.wifi
+
+    #print 'showwifiip = ',args.showwifiip
+    #print 'disableonetimesetup = ',args.disableonetimesetup
+    #print 'enableonetimesetup = ',args.enableonetimesetup
+    #print 'changepassword = ',args.changepassword
+
+    #print 'changename = ',args.changename
+
+if __name__ == "__main__":
+      main()

@@ -24,11 +24,11 @@ def unmountDev path
 	`umount #{path}/dev`
 end
 
-# img = "ubuntu-core.img"
+# img = "ubuntu-core-gnome.img"
 # path = "mars-A1-ub18-core"
 
-img = "ubuntu.img"
-path = "mars-A1-ub18-gnome"
+img = "edison-image-edison.ext4"
+path = "edison-ub20"
 
 # mountImage img, path
 # mountDev path

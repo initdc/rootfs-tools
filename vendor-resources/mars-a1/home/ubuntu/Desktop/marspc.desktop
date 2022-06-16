@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=MARSPC™
+Comment=Homepage of MARSPC™
+Icon=/usr/share/icons/mars/marspc.png
+Type=Application
+Exec=xdg-open https://pc.arm.li/

@@ -27,7 +27,7 @@ end
 # img = "ubuntu-core-gnome.img"
 # path = "mars-A1-ub18-core"
 
-img = "edison-image-edison.ext4"
+img = "edison-image-edison.debian.ext4"
 path = "edison-ub20"
 
 # mountImage img, path

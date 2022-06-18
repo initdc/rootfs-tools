@@ -1,10 +1,10 @@
 require "./fetch.rb"
 require "./mount.rb"
 
-ROOTFS_DIR = "rootfs"
-ROOTFS_IMG = "ubuntu-rootfs.img"
+ROOTFS_DIR = "edison-ub20"
+ROOTFS_IMG = "edison-image-edison.ext4"
 
-SIZE = "8192"
+SIZE = "400"
 
 def main
     fetch_ubuntu
@@ -14,13 +14,13 @@ def main
     `mount -o loop #{ROOTFS_IMG} #{ROOTFS_DIR}`
 
     `tar -C #{ROOTFS_DIR} -zxvf #{CACHE_DIR}/#{FILE}`
-    `cp arm_install.sh #{ROOTFS_DIR}/tmp/`
+    `cp -ar vendor-resources/intel-edison/* #{ROOTFS_DIR}`
+    `cp -ar vendor-resources/intel-edison/lib/* #{ROOTFS_DIR}/lib`
 
     mount ROOTFS_DIR
-    `chroot #{ROOTFS_DIR} /bin/sh /tmp/arm_install.sh`
+    `chroot #{ROOTFS_DIR} /bin/sh /root/config.sh`
 
     unmount ROOTFS_DIR
-    `umount #{ROOTFS_DIR}`
 end
 
 main

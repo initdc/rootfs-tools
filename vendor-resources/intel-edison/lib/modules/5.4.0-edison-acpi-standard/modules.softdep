@@ -1,0 +1,2 @@
+# Soft dependencies extracted from modules themselves.
+softdep spi_pxa2xx_platform pre: dw_dmac

@@ -13,7 +13,7 @@ add_lang_pack() {
 }
 
 install_software() {
-    apt-get install -y curl dnsutils htop ifupdown iputils-ping kmod nano net-tools openssh-server rfkill sudo tree vim wget wireless-tools wpasupplicant
+    apt-get install -y bash-completion curl dnsutils htop ifupdown iputils-ping kmod nano net-tools openssh-server rfkill sudo systemd systemd-sysv tree vim wget wireless-tools wpasupplicant 
 }
 
 main() {
@@ -23,8 +23,11 @@ main() {
 
     add_lang_pack
     install_software
-    add_ubuntu
+    rm -rf /var/lib/apt/*
 
+    add_ubuntu
+    systemctl enable getty@ttyS2.service
+    
     unset DEBIAN_FRONTEND
 }
 

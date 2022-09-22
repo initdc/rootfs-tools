@@ -16,6 +16,7 @@ def main
     `tar -C #{ROOTFS_DIR} -zxvf #{CACHE_DIR}/#{FILE}`
     `cp -ar vendor-resources/intel-edison/* #{ROOTFS_DIR}`
     `cp -ar vendor-resources/intel-edison/lib/* #{ROOTFS_DIR}/lib`
+    `chown root:root -R #{ROOTFS_DIR}`
 
     mount ROOTFS_DIR
     `chroot #{ROOTFS_DIR} /bin/sh /root/config.sh`

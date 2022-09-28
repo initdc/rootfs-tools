@@ -1,7 +1,7 @@
 CACHE_DIR = "cache"
 
-REL = "20.04.4"
-ARCH = "arm64"
+REL = "22.04"
+ARCH = "amd64"
 FILE = "ubuntu-base-#{REL}-base-#{ARCH}.tar.gz"
 
 URL = "https://cdimage.ubuntu.com/ubuntu-base/releases/#{REL}/release"

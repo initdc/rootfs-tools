@@ -5,6 +5,7 @@ set -e
 add_ubuntu() {
     useradd -G sudo -d /home/ubuntu -m -s /bin/bash ubuntu
     echo "ubuntu:ubuntu" | chpasswd
+    echo "root:root" | chpasswd
 }
 
 add_lang_pack() {
@@ -13,7 +14,14 @@ add_lang_pack() {
 }
 
 install_software() {
-    apt-get install -y bash-completion curl dnsutils htop ifupdown iputils-ping kmod nano net-tools network-manager openssh-server rfkill sudo systemd systemd-sysv tree vim wget wireless-tools wpasupplicant 
+    apt-get install -y htop lshw lsof nano net-tools network-manager u-boot-tools wget wireless-tools wpasupplicant
+    apt-get install /root/resize-helper_0.12_all.deb
+}
+
+set_sshd_config() {
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.orig
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
 }
 
 main() {
@@ -21,8 +29,10 @@ main() {
 
     apt-get update
  
-    add_lang_pack
+    # add_lang_pack
     install_software
+    set_sshd_config
+    add_ubuntu
     rm -rf /var/lib/apt/*
 
     # add_ubuntu

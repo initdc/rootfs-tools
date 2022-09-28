@@ -1,5 +1,10 @@
-cache
-/mars*
-rootfs
-ubuntu*.img
-edison*
+cache/
+rootfs/
+boot/
+firmware/
+modules/
+*.ext4
+*.ext4*
+
+mars*/
+ub-*/

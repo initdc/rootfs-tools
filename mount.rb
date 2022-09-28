@@ -30,13 +30,13 @@ end
 # img = "ubuntu-core-gnome.img"
 # path = "mars-A1-ub18-core"
 
-img = "edison-image-edison.debian.ext4"
-path = "edison-ub20"
+img = "edison-image-edison.ext4"
+path = "rootfs"
 
 # mountImage img, path
-# mountDev path
+mountDev path
 
-unmountDev path
-puts "waiting for 3s"
-sleep 3
-unmountImage path
+# unmountDev path
+# puts "waiting for 3s"
+# sleep 3
+# unmountImage path

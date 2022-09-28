@@ -7,7 +7,7 @@ ROOTFS_IMG = "edison-image-edison.ext4"
 SIZE = "400"
 
 def main
-    fetch_ubuntu
+    # fetch_ubuntu
     
     `dd if=/dev/zero of=#{ROOTFS_IMG} bs=1MB count=0 seek=#{SIZE}`
     `mkfs.ext4 -F #{ROOTFS_IMG}`

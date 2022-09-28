@@ -1,2 +1,9 @@
-wget
-qemu
+bridge-utils \
+libvirt-clients \
+libvirt-daemon \
+libvirt-daemon-system \
+qemu \
+qemu-kvm \
+qemu-user-static \
+ruby \
+virtinst \

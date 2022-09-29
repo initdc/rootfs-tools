@@ -7,3 +7,4 @@ qemu-kvm \
 qemu-user-static \
 ruby \
 virtinst \
+wget \

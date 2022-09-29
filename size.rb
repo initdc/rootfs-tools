@@ -110,8 +110,8 @@ class Size
     end
 
     def GetSize
-        @@ratio = self.GetRatio
-        @@block_size = self.GetBlockSize
+        @@ratio = self.GetRatio || @@ratio
+        @@block_size = self.GetBlockSize || @@block_size
 
         rInode =  Size.DirInode @rDir
         rSizeM = Size.DirSizeM @rDir

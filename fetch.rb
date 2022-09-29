@@ -1,20 +1,27 @@
-CACHE_DIR = "cache"
-
 REL = "22.04"
+CODENAME = "jammy"
 ARCH = "amd64"
-FILE = "ubuntu-base-#{REL}-base-#{ARCH}.tar.gz"
 
-URL = "https://cdimage.ubuntu.com/ubuntu-base/releases/#{REL}/release"
+def fetch_ubuntu_base cache_dir
+    url = "https://cdimage.ubuntu.com/ubuntu-base/releases/#{REL}/release"
+    file = "ubuntu-base-#{REL}-base-#{ARCH}.tar.gz"
+    sha256 = "#{url}/SHA256SUMS"
 
-UBUNTU_BASE = "#{URL}/#{FILE}"
-SHA256SUMS = "#{URL}/SHA256SUMS"
-
-def fetch_ubuntu
-    if !File.exist?("#{CACHE_DIR}/#{FILE}")
-        `wget #{UBUNTU_BASE} -P #{CACHE_DIR}`
+    if !File.exist?("#{cache_dir}/#{file}")
+        `wget #{url}/#{file} -P #{cache_dir}`
     end
 
-    if !File.exist?("#{CACHE_DIR}/SHA256SUMS")
-        `wget #{SHA256SUMS} -P #{CACHE_DIR}`
+    `curl -L #{sha256} >> #{cache_dir}/SHA256SUMS`
+end
+
+def fetch_ubuntu_minimal cache_dir
+    url = "https://cloud-images.ubuntu.com/minimal/releases/#{CODENAME}/release/"
+    file = "ubuntu-#{REL}-minimal-cloudimg-#{ARCH}-root.tar.xz"
+    sha256 = "#{url}/SHA256SUMS"
+
+    if !File.exist?("#{cache_dir}/#{file}")
+        `wget #{url}/#{file} -P #{cache_dir}`
     end
+
+    `curl -L #{sha256} >> #{cache_dir}/SHA256SUMS`
 end

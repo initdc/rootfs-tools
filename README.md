@@ -4,7 +4,7 @@
 ## Prepare
 
 ```
-sudo apt install ruby qemu-user-static qemu qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virtinst libvirt-daemon
+sudo apt install ruby wget qemu-user-static qemu qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virtinst libvirt-daemon
 
 sudo systemctl enable --now libvirtd
 ```

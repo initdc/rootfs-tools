@@ -1,8 +1,12 @@
-class Size
-    def initialize temp_rootfs_dir, extra_inode, extra_size_MB
+class Size 
+    @@ratio = 4
+    @@block_size = 4096
+
+    def initialize temp_rootfs_dir, extra_inode, extra_size_MB, rootfs_dev
         @rDir = temp_rootfs_dir
         @eInode = extra_inode
         @eSizeM = extra_size_MB
+        @rDev = rootfs_dev
     end
 
     class << self
@@ -25,12 +29,12 @@ class Size
         #
         # 4 = 32768 / 8192
         def InodeToBlock inode
-            return inode * 4
-        end    
+            return inode * @@ratio
+        end
 
         # Block size:               4096
         def BlockToB block
-            return block * 4096
+            return block * @@block_size
         end
 
         def BlockToK block
@@ -84,7 +88,31 @@ class Size
         end
     end
 
-    def GetSize 
+    def GetRatio
+        output = `sudo tune2fs -l #{@rDev} | grep 'Blocks per group'`
+        blocks = output.split(" ").last
+
+        output = `sudo tune2fs -l #{@rDev} | grep 'Inodes per group'`
+        inodes = output.split(" ").last
+
+        ratio = blocks.to_i.fdiv(inodes.to_i)
+
+        # puts ratio
+        return ratio
+    end
+
+    def GetBlockSize
+        output = `sudo tune2fs -l #{@rDev} | grep 'Block size'`
+        size = output.split(" ").last
+
+        # puts size
+        return size.to_i
+    end
+
+    def GetSize
+        @@ratio = self.GetRatio
+        @@block_size = self.GetBlockSize
+
         rInode =  Size.DirInode @rDir
         rSizeM = Size.DirSizeM @rDir
 
@@ -92,10 +120,15 @@ class Size
         aSizeM = rSizeM + @eSizeM
 
         # puts aInodeM
-        return Size.Bigger(aInodeM.ceil(-2), aSizeM.ceil(-2))
+        return Size.Bigger(aInodeM.ceil(-1), aSizeM.ceil(-1))
     end
 end
 
-# dir = "ub-22"
-# s = Size.new dir, 100, 100
+# dir = "/root"
+# dev = "/dev/sda1"
+
+# s = Size.new dir, 100, 100, dev
+
+# puts s.GetRatio
+# puts s.GetBlockSize
 # puts s.GetSize

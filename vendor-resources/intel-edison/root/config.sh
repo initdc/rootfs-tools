@@ -14,8 +14,8 @@ add_lang_pack() {
 }
 
 install_software() {
-    apt-get install -y htop lshw lsof nano net-tools network-manager u-boot-tools wget wireless-tools wpasupplicant
-    apt-get install /root/resize-helper_0.12_all.deb
+    apt-get install -y dnsutils file htop ifupdown iputils-ping lshw lsof nano net-tools network-manager openssh-server rfkill tree u-boot-tools wget wireless-tools wpasupplicant
+    apt-get install /tmp/resize-helper_0.12_all.deb
 }
 
 set_sshd_config() {
@@ -32,10 +32,9 @@ main() {
     # add_lang_pack
     install_software
     set_sshd_config
-    add_ubuntu
     rm -rf /var/lib/apt/*
 
-    # add_ubuntu
+    add_ubuntu
     systemctl enable getty@ttyS2.service
     
     unset DEBIAN_FRONTEND

@@ -1,5 +1,6 @@
-require "./fetch.rb"
-require "./mount.rb"
+require "fetch"
+require "decompress"
+require "mount"
 
 ROOTFS_DIR = "edison-ub20"
 ROOTFS_IMG = "edison-image-edison.ext4"

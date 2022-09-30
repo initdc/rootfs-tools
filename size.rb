@@ -1,12 +1,12 @@
-class Size 
+class Size
     @@ratio = 4
     @@block_size = 4096
 
-    def initialize temp_rootfs_dir, extra_inode, extra_size_MB, rootfs_dev
-        @rDir = temp_rootfs_dir
-        @eInode = extra_inode
-        @eSizeM = extra_size_MB
-        @rDev = rootfs_dev
+    def initialize temp_rootfs_dir, extra_inode, extra_size_MB, *rootfs_dev
+        @rDir = temp_rootfs_dir.to_s || ""
+        @eInode = extra_inode.to_i || 0
+        @eSizeM = extra_size_MB.to_i || 0
+        @rDev = rootfs_dev[0].to_s || ""
     end
 
     class << self
@@ -55,7 +55,7 @@ class Size
 
         # sudo find . -printf "%h\n" | cut -d / -f -2 | sort | uniq -c | sort -rn
         def DirInode dir 
-            output = `sudo find . -printf "%h\n" | cut -d / -f -2 | sort | uniq -c | sort -rn | grep #{dir}`
+            output = `sudo find #{dir}/.. -printf "%h\n" | cut -d / -f -2 | sort | uniq -c | sort -rn | grep #{dir}`
             inode = output.split(" ").first
             # puts inode
             return inode.to_i
@@ -89,29 +89,47 @@ class Size
     end
 
     def GetRatio
-        output = `sudo tune2fs -l #{@rDev} | grep 'Blocks per group'`
-        blocks = output.split(" ").last
+        if @rDev.empty?
+            puts "missing disk device ARG"
+            return false
+        end
 
-        output = `sudo tune2fs -l #{@rDev} | grep 'Inodes per group'`
-        inodes = output.split(" ").last
-
+        output1 = `sudo tune2fs -l #{@rDev} | grep 'Blocks per group'`
+        output2 = `sudo tune2fs -l #{@rDev} | grep 'Inodes per group'`
+        
+        return false if output1.empty? or output2.empty?
+            
+        blocks = output1.split(" ").last
+        inodes = output2.split(" ").last
         ratio = blocks.to_i.fdiv(inodes.to_i)
-
         # puts ratio
         return ratio
     end
 
     def GetBlockSize
-        output = `sudo tune2fs -l #{@rDev} | grep 'Block size'`
-        size = output.split(" ").last
+        if @rDev.empty?
+            puts "missing disk device ARG"
+            return false
+        end
 
+        output = `sudo tune2fs -l #{@rDev} | grep 'Block size'`
+        return false if output.empty?
+
+        size = output.split(" ").last
         # puts size
         return size.to_i
     end
 
     def GetSize
-        @@ratio = self.GetRatio || @@ratio
-        @@block_size = self.GetBlockSize || @@block_size
+        if !@rDev.empty?
+            @@ratio = self.GetRatio || @@ratio
+            @@block_size = self.GetBlockSize || @@block_size
+        end
+
+        if @rDir.empty?
+            puts "missing directory ARG"
+            return false
+        end
 
         rInode =  Size.DirInode @rDir
         rSizeM = Size.DirSizeM @rDir
@@ -124,11 +142,18 @@ class Size
     end
 end
 
-# dir = "/root"
-# dev = "/dev/sda1"
+# dir = "ub-22"
+# dev = ""
 
-# s = Size.new dir, 100, 100, dev
+# s = Size.new dir, 100, 100
 
 # puts s.GetRatio
 # puts s.GetBlockSize
 # puts s.GetSize
+
+# for n in 1..10
+#     s = Size.new "", 0, 0, "/dev/mmcblk0p#{n}"
+#     puts "/dev/mmcblk0p#{n}  #{s.GetRatio}"
+# end
+
+# sudo ruby size.rb 2>/dev/null

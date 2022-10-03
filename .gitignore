@@ -1,10 +1,20 @@
 cache/
+temp/
 rootfs/
-boot/
-firmware/
-modules/
+
 *.ext4
 *.ext4*
 
 mars*/
+edison/
+
+boot/
+firmware/
+modules/
+
 ub-*/
+fd-*/
+suse-*/
+suse/
+gentoo/
+arch/

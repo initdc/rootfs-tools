@@ -8,6 +8,9 @@ rootfs/
 mars*/
 edison/
 
+linux/
+boot-img/
+initrd/
 boot/
 firmware/
 modules/

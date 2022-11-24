@@ -21,6 +21,15 @@ class Decompress
             return system("7z x -o#{dir} #{file}")
         end
 
+        # https://www.cnblogs.com/Andy-Lv/p/5304247.html
+        def uncpio dir, file
+            pwd_file = "#{Dir.pwd}/#{file}"
+            # puts pwd_file
+            Dir.chdir dir do
+                return system("cpio -i < #{pwd_file}")
+            end
+        end
+
         def done file
             puts "decompress #{file} done"
         end
@@ -39,7 +48,11 @@ class Decompress
         when ".7z"
             Decompress.done @file if Decompress.un7z @dir, @file
         else
-            puts "unknown compress format for: #{@file}"
+            if @file.end_with? "initrd" 
+                Decompress.done @file if Decompress.uncpio @dir, @file
+            else
+                puts "unknown compress format for: #{@file}"
+            end
         end
     end
 end
@@ -50,3 +63,8 @@ end
 #     d = Decompress.new "testdir", f
 #     d.matcher 
 # end
+
+if __FILE__ == $0
+    d = Decompress.new "temp/test", "cache/initrd"
+    d.matcher
+end

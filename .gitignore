@@ -7,6 +7,7 @@ rootfs/
 
 mars*/
 edison/
+licheerv/
 
 linux/
 boot-img/
@@ -14,10 +15,14 @@ initrd/
 boot/
 firmware/
 modules/
+origin/
 
 ub-*/
 fd-*/
 suse-*/
 suse/
-gentoo/
+gentoo*/
 arch/
+alpine*/
+
+fstab

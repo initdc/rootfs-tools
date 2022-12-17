@@ -1,23 +1,25 @@
+# frozen_string_literal: true
+
 require "./decompress"
 
 class Copy
-    @@temp_dir = "temp"
-    def initialize src, dest
+    @temp_dir = "temp"
+    def initialize(src, dest)
         @src = src
         @dest = dest
 
         @pwd = Dir.pwd
-        `mkdir -p #{@pwd}/#{@@temp_dir}`
+        `mkdir -p #{@pwd}/#{@temp_dir}`
     end
 
     class << self
         # ls -d1 */
-        def Fedora src, dest
+        def Fedora(src, dest)
             @pwd = Dir.pwd
 
-            `mkdir -p #{@@temp_dir}/Fedora`
-            Decompress.untar "#{@@temp_dir}/Fedora", src
-            Dir.chdir "#{@@temp_dir}/Fedora" do
+            `mkdir -p #{@temp_dir}/Fedora`
+            Decompress.untar "#{@temp_dir}/Fedora", src
+            Dir.chdir "#{@temp_dir}/Fedora" do
                 inner = `ls -d1 */`.delete "\/\n"
                 puts "#{inner}/layer.tar"
                 if File.exist? "#{inner}/layer.tar"
@@ -28,12 +30,12 @@ class Copy
             end
         end
 
-        def Arch src, dest
+        def Arch(src, dest)
             @pwd = Dir.pwd
 
-            `mkdir -p #{@@temp_dir}/Arch`
-            Decompress.ungz "#{@@temp_dir}/Arch", src
-            Dir.chdir "#{@@temp_dir}/Arch" do
+            `mkdir -p #{@temp_dir}/Arch`
+            Decompress.ungz "#{@temp_dir}/Arch", src
+            Dir.chdir "#{@temp_dir}/Arch" do
                 inner = `ls -d1 */`.delete "\/\n"
                 return system("sudo cp -a #{inner}/* #{@pwd}/#{dest}")
             end
@@ -42,9 +44,8 @@ class Copy
 end
 
 # https://launchpad.net/~canonical-kernel-team/+archive/ubuntu/ppa/+build/24173564
-def copy_kernel src, dest, extra = []
-
-    file_paths = %W[
+def copy_kernel(src, dest, extra = [])
+    file_paths = %w[
         /boot/
         /lib/firmware/
         /lib/modprobe.d/
@@ -53,9 +54,9 @@ def copy_kernel src, dest, extra = []
 
         /etc/fstab
     ]
-    file_paths = file_paths + extra
+    file_paths += extra
 
-    exec_dir = Dir.pwd
+    # exec_dir = Dir.pwd
 
     `mkdir -p #{dest}`
     Dir.chdir dest do
@@ -63,24 +64,24 @@ def copy_kernel src, dest, extra = []
             cp_src = "#{src}#{file_path}"
             dest_path = file_path.delete_prefix("/")
 
-            if dest_path.end_with?("/")
-                is_file = false
-            else
-                is_file = true
-            end
+            # is_file = if dest_path.end_with?('/')
+            #               false
+            #           else
+            #               true
+            #           end
 
             parent_arr = dest_path.split("/")
-            parent_arr.pop()
+            parent_arr.pop
             # p parent_arr
 
-            case parent_arr.size
-            when 0
-                parent_dir = ""
-            when 1
-                parent_dir = parent_arr[0]
-            else
-                parent_dir = parent_arr.join("/")
-            end
+            parent_dir = case parent_arr.size
+                         when 0
+                             ""
+                         when 1
+                             parent_arr[0]
+                         else
+                             parent_arr.join("/")
+                         end
 
             if parent_dir != ""
                 `mkdir -p #{parent_dir}`
@@ -107,7 +108,7 @@ end
 # Copy.Fedora "cache/Fedora-Container-Base-36-1.5.x86_64.tar.xz", "fd-36"
 # Copy.Arch "cache/archlinux-bootstrap-2022.09.03-x86_64.tar.gz", "arch"
 
-extra = %W[
+extra = %w[
     /usr/lib/linux-allwinner-5.17-tools-5.17.0-1003/
     /usr/lib/libcpupower.so.5.17.0-1003
     /usr/lib/linux-tools/

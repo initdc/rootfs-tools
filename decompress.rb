@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Decompress
     def initialize(dir, file)
         @dir = dir
@@ -5,24 +7,24 @@ class Decompress
     end
 
     class << self
-        def unzip dir, file
+        def unzip(dir, file)
             return system("unzip -d #{dir} #{file}")
         end
 
-        def untar dir, file
+        def untar(dir, file)
             return system("tar -C #{dir} -xvf #{file}")
         end
 
-        def ungz dir, file
+        def ungz(dir, file)
             return system("tar -C #{dir} -zxvf #{file}")
         end
 
-        def un7z dir, file
+        def un7z(dir, file)
             return system("7z x -o#{dir} #{file}")
         end
 
         # https://www.cnblogs.com/Andy-Lv/p/5304247.html
-        def uncpio dir, file
+        def uncpio(dir, file)
             pwd_file = "#{Dir.pwd}/#{file}"
             # puts pwd_file
             Dir.chdir dir do
@@ -30,7 +32,7 @@ class Decompress
             end
         end
 
-        def done file
+        def done(file)
             puts "decompress #{file} done"
         end
     end
@@ -48,7 +50,7 @@ class Decompress
         when ".7z"
             Decompress.done @file if Decompress.un7z @dir, @file
         else
-            if @file.end_with? "initrd" 
+            if @file.end_with? "initrd"
                 Decompress.done @file if Decompress.uncpio @dir, @file
             else
                 puts "unknown compress format for: #{@file}"
@@ -61,7 +63,7 @@ end
 
 # for f in list
 #     d = Decompress.new "testdir", f
-#     d.matcher 
+#     d.matcher
 # end
 
 if __FILE__ == $0

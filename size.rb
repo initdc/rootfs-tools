@@ -1,8 +1,10 @@
-class Size
-    @@ratio = 4
-    @@block_size = 4096
+# frozen_string_literal: true
 
-    def initialize temp_rootfs_dir, extra_inode, extra_size_MB, *rootfs_dev
+class Size
+    @ratio = 4
+    @block_size = 4096
+
+    def initialize(temp_rootfs_dir, extra_inode, extra_size_MB, *rootfs_dev)
         @rDir = temp_rootfs_dir.to_s || ""
         @eInode = extra_inode.to_i || 0
         @eSizeM = extra_size_MB.to_i || 0
@@ -10,81 +12,82 @@ class Size
     end
 
     class << self
-        def BtoK size
+        def BtoK(size)
             return size / 1024
         end
 
-        def KtoM size
+        def KtoM(size)
             return size / 1024
         end
 
-        def MtoG size
+        def MtoG(size)
             return size / 1024
         end
 
         # sudo tune2fs -l /dev/nvme0n1p4
-        # 
+        #
         # Blocks per group:         32768
         # Inodes per group:         8192
         #
         # 4 = 32768 / 8192
-        def InodeToBlock inode
-            return inode * @@ratio
+        def InodeToBlock(inode)
+            return inode * @ratio
         end
 
         # Block size:               4096
-        def BlockToB block
-            return block * @@block_size
+        def BlockToB(block)
+            return block * @block_size
         end
 
-        def BlockToK block
+        def BlockToK(block)
             return BtoK(BlockToB(block))
         end
 
-        def InodeToK inode
+        def InodeToK(inode)
             return BlockToK(InodeToBlock(inode))
         end
 
-        def BlockToM block
+        def BlockToM(block)
             return KtoM(BlockToK(block))
         end
 
-        def InodeToM inode
+        def InodeToM(inode)
             return KtoM(InodeToK(inode))
         end
 
         # sudo find . -printf "%h\n" | cut -d / -f -2 | sort | uniq -c | sort -rn
-        def DirInode dir 
+        def DirInode(dir)
             output = `sudo find #{dir}/.. -printf "%h\n" | cut -d / -f -2 | sort | uniq -c | sort -rn | grep #{dir}`
             inode = output.split(" ").first
             # puts inode
             return inode.to_i
         end
 
-        def DirSizeK dir
+        def DirSizeK(dir)
             output = `sudo du -d0 #{dir}`
             size = output.split(" ").first
             # puts size
             return size.to_i
         end
 
-        def DirSizeM dir
+        def DirSizeM(dir)
             return KtoM(DirSizeK(dir))
         end
 
-        def DirInodeK dir
+        def DirInodeK(dir)
             result = InodeToK(DirInode(dir))
             # puts result
             return result
         end
 
-        def DirInodeM dir
+        def DirInodeM(dir)
             return KtoM(DirInodeK(dir))
         end
 
-        def Bigger a, b
-            return a if a >= b
-            return b
+        def Bigger(num_a, num_b)
+            return num_a if num_a >= num_b
+
+            return num_b
         end
     end
 
@@ -96,9 +99,9 @@ class Size
 
         output1 = `sudo tune2fs -l #{@rDev} | grep 'Blocks per group'`
         output2 = `sudo tune2fs -l #{@rDev} | grep 'Inodes per group'`
-        
+
         return false if output1.empty? or output2.empty?
-            
+
         blocks = output1.split(" ").last
         inodes = output2.split(" ").last
         ratio = blocks.to_i.fdiv(inodes.to_i)
@@ -121,9 +124,9 @@ class Size
     end
 
     def GetSize
-        if !@rDev.empty?
-            @@ratio = self.GetRatio || @@ratio
-            @@block_size = self.GetBlockSize || @@block_size
+        unless @rDev.empty?
+            @ratio = self.GetRatio || @ratio
+            @block_size = self.GetBlockSize || @block_size
         end
 
         if @rDir.empty?
@@ -131,7 +134,7 @@ class Size
             return false
         end
 
-        rInode =  Size.DirInode @rDir
+        rInode = Size.DirInode @rDir
         rSizeM = Size.DirSizeM @rDir
 
         aInodeM = Size.InodeToM(rInode + @eInode)

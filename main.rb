@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "./fetch"
 require "./decompress"
 require "./size"
@@ -17,7 +19,7 @@ def main
 
     d = Decompress.new TEMP_ROOTFS_DIR, "#{CACHE_DIR}/#{ROOT_PKG}"
     d.matcher
-    
+
     `cp -a boot #{TEMP_ROOTFS_DIR}`
     `cp -a firmware #{TEMP_ROOTFS_DIR}/lib`
     `cp -a modules #{TEMP_ROOTFS_DIR}/lib`

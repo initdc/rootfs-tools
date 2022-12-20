@@ -5,6 +5,9 @@ rootfs/
 *.ext4
 *.ext4*
 
+*.img
+*.img*
+
 mars*/
 edison/
 licheerv/
@@ -15,7 +18,7 @@ initrd/
 boot/
 firmware/
 modules/
-origin/
+origin*/
 
 ub-*/
 fd-*/

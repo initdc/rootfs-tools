@@ -62,17 +62,9 @@ def mountLoop(img, *opt)
     return output.delete_suffix("\n")
 end
 
-def mountCombinedImage(img, path, *opt)
+def mountCombinedImage(img, path = nil, *opt)
     par = opt[0]
     loop_dev = opt[1]
-
-    system "fdisk -l #{img}"
-
-    if par.nil?
-        print "which partition to mount: "
-        par = gets.delete_suffix("\n")
-        # p par
-    end
 
     if loop_dev.nil?
         loop_dev = mountLoop img
@@ -80,10 +72,22 @@ def mountCombinedImage(img, path, *opt)
         mountLoop img, loop_dev
     end
 
-    loop_par = "#{loop_dev}p#{par}"
+    if path != nil
+        system "fdisk -l #{img}"
 
-    puts "mounting #{loop_par} on #{path}"
-    `mount #{loop_par} #{path}`
+        if par.nil?
+            print "which partition to mount: "
+            par = gets.delete_suffix("\n")
+            # p par
+        end
+
+        loop_par = "#{loop_dev}p#{par}"
+
+        puts "mounting #{loop_par} on #{path}"
+        `mount #{loop_par} #{path}`
+    else
+        puts "#{img} mounted on #{loop_dev}"
+    end
 end
 
 def unmountCombinedImage(img)
@@ -94,18 +98,29 @@ def unmountCombinedImage(img)
     end
 end
 
-# img = "ubuntu-core-gnome.img"
-# path = "mars-A1-ub18-core"
+if __FILE__ == $0
+    # img = "ubuntu-core-gnome.img"
+    # path = "mars-A1-ub18-core"
 
-img = "/home/ubuntu/workspace/ubuntu-22.10-preinstalled-server-riscv64+licheerv.img"
-path = "rootfs"
+    img = "vf2.img"
+    path = "rootfs"
 
-# mountImage img, path
-# mountCombinedImage img, path, 1
-# mountDev path
+    # mountImage img, path
+    # mountCombinedImage img, path
+    # mountDev path
 
-unmountDev path
-puts "waiting for 3s"
-sleep 3
-unmountImage path
-unmountCombinedImage img
+    # unmountDev path
+    # puts "waiting for 3s"
+    # sleep 3
+    unmountImage path
+    # unmountCombinedImage img
+
+    img2 = 'starfive-jh7110-VF2-VF2_515_v2.3.0-55.img'
+    # mountCombinedImage img2, "vf-de"
+    unmountImage "vf-de"
+
+    # mountCombinedImage img2
+    # mountCombinedImage img
+    unmountCombinedImage img2
+    unmountCombinedImage img
+end

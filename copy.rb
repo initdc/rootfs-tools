@@ -105,13 +105,48 @@ def copy_kernel(src, dest, extra = [])
     end
 end
 
-# Copy.Fedora "cache/Fedora-Container-Base-36-1.5.x86_64.tar.xz", "fd-36"
-# Copy.Arch "cache/archlinux-bootstrap-2022.09.03-x86_64.tar.gz", "arch"
+# copy_map = {
+#     "0": "1",
+#     "2": "2"
+# }
+def copy_par(src, dest, copy_map = nil)
+    if copy_map.nil?
+        print `ls -d1 #{src}p*`
+        puts
 
-extra = %w[
-    /usr/lib/linux-allwinner-5.17-tools-5.17.0-1003/
-    /usr/lib/libcpupower.so.5.17.0-1003
-    /usr/lib/linux-tools/
-]
+        puts "which partition(s) you want copy:"
+        puts "(eg: 1, 3,4)"
+        pars = gets.delete_suffix("\n").delete(" ").split(",")
+        pars.each do |par|
+            cmd = "dd if=#{src}p#{par} of=#{dest}p#{par}"
+            puts cmd
+            system cmd
+        end
+    else
+        copy_map.each do |par_s, par_d|
+            cmd = "dd if=#{src}p#{par_s} of=#{dest}p#{par_d}"
+            puts cmd
+            system cmd
+        end
+    end
+end
 
-copy_kernel "/media/ubuntu/cloudimg-rootfs", "origin"
+if __FILE__ == $0
+    # Copy.Fedora "cache/Fedora-Container-Base-36-1.5.x86_64.tar.xz", "fd-36"
+    # Copy.Arch "cache/archlinux-bootstrap-2022.09.03-x86_64.tar.gz", "arch"
+
+    l_extra = %w[
+        /usr/lib/linux-allwinner-5.17-tools-5.17.0-1003/
+        /usr/lib/libcpupower.so.5.17.0-1003
+        /usr/lib/linux-tools/
+    ]
+
+    v_extra = %w[
+        /usr/lib/linux-image-5.15.0-starfive/
+    ]
+
+    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/vf-de", "origin", v_extra
+    copy_kernel "/home/ubuntu/vscode/rootfs-tools/origin", "/media/ubuntu/94ee1ed4-92f9-43dd-9ba9-c8be451fa14a", v_extra
+
+    # copy_par "/dev/loop5", "/dev/loop6"
+end

@@ -1,0 +1,10 @@
+label: gpt
+label-id: 6BEBB43B-65F5-4057-BC3A-D9B242D06F29
+device: vf2.img
+unit: sectors
+first-lba: 34
+last-lba: 4095900
+
+vf2.img1 : start=        2048, size=       32768, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, uuid=5F7FD372-5546-44DF-B018-A077758CEE2F
+vf2.img2 : start=       34816, size=      204800, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, uuid=BDC51E7D-66F3-4BA4-AC93-ADF2E8850928
+vf2.img3 : start=      239616, size=     3856284, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, uuid=3D4C02EB-9C28-46A1-A86B-71666EF51CDB, attrs="LegacyBIOSBootable"

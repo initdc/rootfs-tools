@@ -1,10 +1,14 @@
-bridge-utils \
-libvirt-clients \
-libvirt-daemon \
-libvirt-daemon-system \
-qemu \
-qemu-kvm \
-qemu-user-static \
-ruby \
-virtinst \
-wget \
+git-core
+ruby
+qemu-user-static
+libvirt-daemon-system
+
+xz-utils
+
+unzip
+p7zip-full
+cpio
+
+wget
+
+fdisk

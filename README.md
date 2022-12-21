@@ -4,11 +4,12 @@
 ## Prepare
 
 ```
-sudo apt install ruby wget qemu-user-static qemu qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virtinst libvirt-daemon
+sudo apt update
+sudo apt install $(cat dep.txt)
 
 sudo systemctl enable --now libvirtd
 ```
-ref: https://www.how2shout.com/linux/how-to-install-qemu-kvm-on-ubuntu-22-04-20-04-lts/
+ref: https://wiki.gentoo.org/wiki/RISC-V_Qemu_setup
 
 ## Run
 

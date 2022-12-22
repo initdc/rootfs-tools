@@ -119,13 +119,17 @@ def copy_par(src, dest, copy_map = nil)
         puts "(eg: 1, 3,4)"
         pars = gets.delete_suffix("\n").delete(" ").split(",")
         pars.each do |par|
-            cmd = "dd if=#{src}p#{par} of=#{dest}p#{par}"
+            dd_src = `ls -d1 #{src}*#{par}`.delete_suffix("\n")
+            dd_dest = `ls -d1 #{dest}*#{par}`.delete_suffix("\n")
+            cmd = "dd if=#{dd_src} of=#{dd_dest}"
             puts cmd
             system cmd
         end
     else
         copy_map.each do |par_s, par_d|
-            cmd = "dd if=#{src}p#{par_s} of=#{dest}p#{par_d}"
+            dd_src = `ls -d1 #{src}*#{par_s}`.delete_suffix("\n")
+            dd_dest = `ls -d1 #{dest}*#{par_d}`.delete_suffix("\n")
+            cmd = "dd if=#{dd_src} of=#{dd_dest}"
             puts cmd
             system cmd
         end
@@ -151,8 +155,8 @@ if __FILE__ == $0
         /boot/uEnv.txt
     ]
 
-    copy_kernel "/home/ubuntu/vscode/rootfs-tools/vf-de", "origin-boot", extlinux_uEnv, true
-    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/origin", "/media/ubuntu/94ee1ed4-92f9-43dd-9ba9-c8be451fa14a", v_extra
+    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/vf-de", "origin", v_extra
+    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/origin", "rootfs"
 
-    # copy_par "/dev/loop5", "/dev/loop6"
+    copy_par "/dev/loop6", "/dev/sdc"
 end

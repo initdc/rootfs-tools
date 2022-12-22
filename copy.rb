@@ -44,7 +44,7 @@ class Copy
 end
 
 # https://launchpad.net/~canonical-kernel-team/+archive/ubuntu/ppa/+build/24173564
-def copy_kernel(src, dest, extra = [])
+def copy_kernel(src, dest, extra = [], no_default = false)
     file_paths = %w[
         /boot/
         /lib/firmware/
@@ -54,6 +54,7 @@ def copy_kernel(src, dest, extra = [])
 
         /etc/fstab
     ]
+    file_paths = [] if no_default
     file_paths += extra
 
     # exec_dir = Dir.pwd
@@ -145,8 +146,13 @@ if __FILE__ == $0
         /usr/lib/linux-image-5.15.0-starfive/
     ]
 
-    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/vf-de", "origin", v_extra
-    copy_kernel "/home/ubuntu/vscode/rootfs-tools/origin", "/media/ubuntu/94ee1ed4-92f9-43dd-9ba9-c8be451fa14a", v_extra
+    extlinux_uEnv = %w[
+        /boot/extlinux/
+        /boot/uEnv.txt
+    ]
+
+    copy_kernel "/home/ubuntu/vscode/rootfs-tools/vf-de", "origin-boot", extlinux_uEnv, true
+    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/origin", "/media/ubuntu/94ee1ed4-92f9-43dd-9ba9-c8be451fa14a", v_extra
 
     # copy_par "/dev/loop5", "/dev/loop6"
 end

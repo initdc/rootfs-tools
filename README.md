@@ -55,6 +55,17 @@ like you need `qemu-aarch64` runing an `aarch64` binary on x86_64 host.
 
 It's pretty easy task after this tool handling some **dirty work**, so have fun!
 
+## Sponsors
+
+[<img alt="CNRV" src="https://assets-1.vercel.app/CNRV_200.png" 
+width="100px">](https://riscv.org/blog-chinese/2022/11/cnrv-devboard-hacks/)
+[<img alt="Your Logo" src="https://assets-1.vercel.app/your-logo.svg" width="100px">](#sponsors)
+[<img alt="Your Logo" src="https://assets-1.vercel.app/your-logo.svg" width="100px">](#sponsors)
+
+[<img alt="Your Logo" src="https://assets-1.vercel.app/your-logo.svg" width="100px">](#sponsors)
+[<img alt="Your Logo" src="https://assets-1.vercel.app/your-logo.svg" width="100px">](#sponsors)
+[<img alt="Your Logo" src="https://assets-1.vercel.app/your-logo.svg" width="100px">](#sponsors)
+
 ## License
 
 MPL-2.0

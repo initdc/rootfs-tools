@@ -33,6 +33,7 @@ RUN set -e \
     # decompress.rb
     unzip \
     p7zip-full \
+    zstd \
     cpio \
 
     # fetch.rb

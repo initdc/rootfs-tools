@@ -43,7 +43,7 @@ class Decompress
         case ext
         when ".zip"
             Decompress.done @file if Decompress.unzip @dir, @file
-        when ".tar", ".xz"
+        when ".tar", ".xz", ".zst"
             Decompress.done @file if Decompress.untar @dir, @file
         when ".tgz", ".gz"
             Decompress.done @file if Decompress.ungz @dir, @file

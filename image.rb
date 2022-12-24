@@ -32,7 +32,11 @@ end
 # https://manpages.ubuntu.com/manpages/jammy/man8/mkfs.8.html
 # https://manpages.ubuntu.com/manpages/jammy/man8/mkfs.ext4.8.html
 # https://manpages.ubuntu.com/manpages/jammy/en/man8/sfdisk.8.html
-def mk_rootfs(img, block_count, block_size = nil, layout = nil, mkfs_cmd = nil)
+def mk_rootfs(img, block_count, *opt, **args)
+    block_size = opt[0] || args[:block_size]
+    layout = opt[1] || args[:layout]
+    mkfs_cmd = opt[2] || args[:mkfs_cmd]
+
     dd_bs = if block_size.nil? or block_size.empty?
                 ""
             else
@@ -68,8 +72,9 @@ if __FILE__ == $0
     # mk_rootfs "test-MB.img", 2100, "1MB"
     # mk_rootfs "test-MiB.img", 2001, "1MiB"
     # mk_rootfs "test-MB.img", 2100, "1MB", "vf2"
-    mk_rootfs "test-MiB.img", 2001, "1MiB", "vf2"
+    # mk_rootfs "test-MiB.img", 2001, "1MiB", "vf2"
     # mk_rootfs "test.img", 4096100, "" ,"vf2"
     # mk_rootfs "test.img", 4096100, nil, "vf2"
     # mk_rootfs "test.img", 4096100, nil, nil, "mkfs.ext4 -F"
+    mk_rootfs "test.img", 4096100, layout: "vf2"
 end

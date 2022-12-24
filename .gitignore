@@ -29,3 +29,6 @@ arch/
 alpine*/
 
 fstab
+*.scr
+*.scr.bak
+*.script

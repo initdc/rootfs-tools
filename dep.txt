@@ -12,4 +12,6 @@ cpio
 
 wget
 
+u-boot-tools
+
 fdisk

@@ -39,6 +39,9 @@ RUN set -e \
     # fetch.rb
     wget \
 
+    #image.rb
+    u-boot-tools \
+
     # main.rb
 
     # mount.rb

@@ -1,0 +1,16 @@
+label: gpt
+label-id: 73987B6B-4974-4C94-A3E8-58AB2EB7A946
+device: rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img
+unit: sectors
+first-lba: 34
+last-lba: 15234340
+
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img1 : start=       16384, size=        8192, type=F808D051-1602-4DCD-9452-F9637FEFC49A, uuid=B750E44E-833F-4A30-C38C-B117241D84D4, name="uboot"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img2 : start=       24576, size=        8192, type=C6D08308-E418-4124-8890-F8411E3D8D87, uuid=A1C81622-7741-47AD-B846-C6972488D396, name="misc"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img3 : start=       32768, size=        8192, type=2A583E58-486A-4BD4-ACE4-8D5454E97F5C, uuid=43784A32-A03D-4ADE-92C6-EDE64FF9B794, name="dtbo"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img4 : start=       40960, size=       32768, type=6115F139-4F47-4BAF-8D23-B6957EAEE4B3, uuid=000B305F-484A-4582-9090-4AD0099D47BD, name="resource"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img5 : start=       73728, size=       81920, type=A83FBA16-D354-45C5-8B44-3EC50832D363, uuid=24EEB649-277F-4C11-FFEB-D9F20027A83B, name="kernel"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img6 : start=      155648, size=       65536, type=500E2214-B72D-4CC3-D7C1-8419260130F5, uuid=1CAC805F-726A-495A-FD35-821355A6E7E8, name="boot"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img7 : start=      221184, size=       65536, type=E099DA71-5450-44EA-AA9F-1B771C582805, uuid=2BFEE623-D83C-426A-AB80-21732C9BB7D3, name="recovery"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img8 : start=      286720, size=     7864320, type=AF12D156-5D5B-4EE3-B415-8D492CA12EA9, uuid=B2AF085D-A675-48C6-C437-F6D557FF4744, name="rootfs"
+rk3588-sd-ubuntu-jammy-desktop-5.10-arm64-20221213.img9 : start=     8151040, size=     7083301, type=8EB9EE49-E963-4BB6-FD75-F30618DF9DCD, uuid=2D9E7B61-1B31-47E7-EE0D-8CEC26D42EF6, name="userdata"

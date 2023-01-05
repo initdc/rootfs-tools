@@ -1,0 +1,10 @@
+label: gpt
+label-id: 837CB2D9-B9E9-4232-9967-880913144D47
+device: cache/Manjaro-ARM-gnome-generic-22.12.img
+unit: sectors
+first-lba: 34
+last-lba: 14815198
+sector-size: 512
+
+cache/Manjaro-ARM-gnome-generic-22.12.img1 : start=        2048, size=      997376, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=069CB19B-E0B2-4CB8-A53F-37FCE9C6EAE7, name="primary"
+cache/Manjaro-ARM-gnome-generic-22.12.img2 : start=      999424, size=    13813760, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, uuid=1B17A334-53C8-4A52-A9A9-38542BA1A14B, name="primary"

@@ -155,8 +155,16 @@ if __FILE__ == $0
         /boot/uEnv.txt
     ]
 
-    # copy_kernel "/home/ubuntu/vscode/rootfs-tools/vf-de", "origin", v_extra
+    r_extra = %w[
+        /lib/firmware/
+        /lib/modules/
+    ]
+
+    r_map = {
+        "2": "8",
+    }
+    # copy_kernel "/media/ubuntu/rootfs", "origin", r_extra, true
     # copy_kernel "/home/ubuntu/vscode/rootfs-tools/origin", "rootfs"
 
-    copy_par "/dev/loop6", "/dev/sdc"
+    copy_par "/dev/loop14", "/dev/loop15", r_map
 end

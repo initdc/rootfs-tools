@@ -39,6 +39,12 @@ RUN set -e \
     # fetch.rb
     wget \
 
+    # fstab.rb
+    btrfs-progs \
+    dosfstools \
+    exfat-utils \
+    ntfs-3g \
+
     #image.rb
     u-boot-tools \
 

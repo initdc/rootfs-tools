@@ -12,6 +12,11 @@ cpio
 
 wget
 
+btrfs-progs
+dosfstools
+exfat-utils
+ntfs-3g
+
 u-boot-tools
 
 fdisk

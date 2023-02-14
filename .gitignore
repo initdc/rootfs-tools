@@ -11,6 +11,11 @@ rootfs/
 mars*/
 edison/
 licheerv/
+binary/
+rk-vendor/
+merged/
+diff/
+work/
 
 linux/
 boot-img/

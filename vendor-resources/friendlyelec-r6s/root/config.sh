@@ -35,7 +35,10 @@ main() {
 
     add_ubuntu
     # systemctl enable getty@ttyS2.service
-    
+
+    touch /etc/cloud/cloud-init.disabled
+    apt autoremove --purge snapd
+
     unset DEBIAN_FRONTEND
 }
 
